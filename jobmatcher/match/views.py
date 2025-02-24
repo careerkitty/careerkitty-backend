@@ -8,7 +8,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from bson import ObjectId
 from django.conf import settings
 from .serializers import JobDescriptionSerializer, ResumeSerializer, MatchSerializer
-from .utils import analyze_match, extract_skills, extract_education, extract_experience, extract_title, extract_text_from_file, extract_responsibilities
+from utils.utils import analyze_match, extract_skills, extract_education, extract_experience, extract_title, extract_text_from_file, extract_responsibilities
 
 # Access MongoDB
 db = settings.MONGO_DB
