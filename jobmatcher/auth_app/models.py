@@ -1,7 +1,7 @@
 from django.conf import settings
 import uuid
 
-db = settings.MONGO_DB  # Ensure MONGO_DB is properly configured in settings.py
+db = settings.MONGO_DB  
 
 class UserProfile:
     collection = db["users"]

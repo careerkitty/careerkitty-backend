@@ -2,6 +2,19 @@ import fitz
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import re
+import jwt
+from rest_framework.exceptions import AuthenticationFailed
+from django.conf import settings
+
+
+def decode_jwt(token):
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+        return payload
+    except jwt.ExpiredSignatureError:
+        raise AuthenticationFailed('Token has expired')
+    except jwt.InvalidTokenError:
+        raise AuthenticationFailed('Invalid token')
 
 # Load a pre-trained transformer model
 model = SentenceTransformer('paraphrase-MiniLM-L6-v2')

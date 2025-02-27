@@ -4,7 +4,7 @@ from django.core.files.storage import FileSystemStorage
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import MultiPartParser, FormParser,JSONParser
 from bson import ObjectId
 from django.conf import settings
 from .serializers import JobDescriptionSerializer, ResumeSerializer, MatchSerializer
@@ -15,72 +15,81 @@ db = settings.MONGO_DB
 
 
 class JobDescriptionView(APIView):
-    parser_classes = (MultiPartParser, FormParser)
+    parser_classes = (MultiPartParser, FormParser, JSONParser)  # Add JSONParser to support JSON requests
 
     def post(self, request):
-        # Extract job description text
-        job_desc_file = request.FILES.get('file', None)
-        if job_desc_file:
-            # Extract text from the file
-            job_desc_text = extract_text_from_file(job_desc_file)
-
-            # Extract structured data from the text
-            title = extract_title(job_desc_text)
-            required_skills = extract_skills(job_desc_text)
-            education = extract_education(job_desc_text)
-            responsibilities = extract_experience(job_desc_text)
-            years_of_experience = extract_experience(job_desc_text) 
-            responsibilities = extract_responsibilities(job_desc_text)
-
-            # Save the job description to MongoDB
-            job_data = {
-                "title": title,
-                "description": job_desc_text,
-                "required_skills": required_skills,
-                "education": education,
-                "responsibilities": responsibilities,
-                "years_of_experience": years_of_experience, 
-                "file": job_desc_file.name
-            }
-
-            job_id = db.job_descriptions.insert_one(job_data).inserted_id
-            job_data["_id"] = str(job_id)  # Convert ObjectId to string for response
-            return Response(job_data, status=status.HTTP_201_CREATED)
+        job_desc_text = None
         
-        return Response({"error": "No file uploaded"}, status=status.HTTP_400_BAD_REQUEST)
+        if "file" in request.FILES:
+            # If a file is uploaded, extract text from it
+            job_desc_file = request.FILES["file"]
+            job_desc_text = extract_text_from_file(job_desc_file)
+        elif "text" in request.data:
+            # If text is provided in JSON, use it directly
+            job_desc_text = request.data["text"]
 
+        if not job_desc_text:
+            return Response({"error": "No job description provided (file or text)"}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Extract structured data from the text
+        title = extract_title(job_desc_text)
+        required_skills = extract_skills(job_desc_text)
+        education = extract_education(job_desc_text)
+        responsibilities = extract_responsibilities(job_desc_text)
+        years_of_experience = extract_experience(job_desc_text)
+
+        # Save to MongoDB
+        job_data = {
+            "title": title,
+            "description": job_desc_text,
+            "required_skills": required_skills,
+            "education": education,
+            "responsibilities": responsibilities,
+            "years_of_experience": years_of_experience
+        }
+
+        if "file" in request.FILES:
+            job_data["file"] = job_desc_file.name  # Save file name if uploaded
+
+        job_id = db.job_descriptions.insert_one(job_data).inserted_id
+        job_data["_id"] = str(job_id)  # Convert ObjectId to string
+
+        return Response(job_data, status=status.HTTP_201_CREATED)
+    
 class ResumeView(APIView):
     parser_classes = (MultiPartParser, FormParser)
 
     def post(self, request):
-        # Check if file is uploaded
         resume_file = request.FILES.get('file', None)
+        resume_text = request.data.get('resume_text', '').strip()  # Get text from request body
+
         if resume_file:
             # Extract text from the uploaded file
             resume_text = extract_text_from_file(resume_file)
+        elif not resume_text:
+            return Response({"error": "No file uploaded or text provided"}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Automatically extract information from the text
-            skills = extract_skills(resume_text)
-            education = extract_education(resume_text)
-            responsibilities = extract_responsibilities(resume_text)
-            experience = extract_experience(resume_text)
-            
-            # Build the resume data dictionary
-            resume_data = {
-                "skills": skills,
-                "education": education,
-                "responsibilities": responsibilities,
-                "experience": experience,
-                "file": resume_file.name
-            }
-            
-            # Save the resume data to MongoDB
-            resume_id = db.resumes.insert_one(resume_data).inserted_id
-            resume_data["_id"] = str(resume_id)  # Convert ObjectId to string for response
-            return Response(resume_data, status=status.HTTP_201_CREATED)
-        
-        return Response({"error": "No file uploaded"}, status=status.HTTP_400_BAD_REQUEST)
+        # Automatically extract information from the text
+        skills = extract_skills(resume_text)
+        education = extract_education(resume_text)
+        responsibilities = extract_responsibilities(resume_text)
+        experience = extract_experience(resume_text)
+
+        # Build the resume data dictionary
+        resume_data = {
+            "skills": skills,
+            "education": education,
+            "responsibilities": responsibilities,
+            "experience": experience,
+            "file": resume_file.name if resume_file else None,  # Store filename if file was uploaded
+            "text": resume_text if not resume_file else None  # Store text if no file was uploaded
+        }
+
+        # Save the resume data to MongoDB
+        resume_id = db.resumes.insert_one(resume_data).inserted_id
+        resume_data["_id"] = str(resume_id)  # Convert ObjectId to string for response
+
+        return Response(resume_data, status=status.HTTP_201_CREATED)
 
 
 class MatchView(APIView):
